@@ -9,3 +9,4 @@ scipy
 tensorflow==2.15.0
 pyacoustid
 musicbrainzngs
+googlesearch-python

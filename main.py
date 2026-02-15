@@ -8,6 +8,8 @@ from pathlib import Path
 from services.youtube_service import YoutubeService
 from services.transcription_service import TranscriptionService
 from services.recognition_service import RecognitionService
+from googlesearch import search
+from fastapi import Request
 import gc
 
 app = FastAPI(title="Violin Sheet Generator")
