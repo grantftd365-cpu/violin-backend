@@ -49,7 +49,12 @@ async def transcribe_upload(file: UploadFile = File(...)):
         gc.collect()
         
         # Validate file type
-        allowed_extensions = {'.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac', '.wma'}
+        allowed_extensions = {
+            # Audio
+            '.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac', '.wma',
+            # Video (ffmpeg will extract audio)
+            '.mp4', '.mov', '.avi', '.webm', '.mkv'
+        }
         file_ext = Path(file.filename).suffix.lower()
         
         if file_ext not in allowed_extensions:
