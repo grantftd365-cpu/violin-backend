@@ -66,23 +66,21 @@ async def transcribe_youtube(request: TranscriptionRequest):
             raise HTTPException(status_code=500, detail="Failed to convert MIDI to MusicXML")
 
         # 4. Read content
+        if not xml_path.exists():
+            print(f"ERROR: XML file missing at {xml_path}")
+            raise HTTPException(status_code=500, detail="XML file generation failed")
+
         with open(xml_path, "r", encoding="utf-8") as f:
             musicxml_content = f.read()
 
         # Debug: Check if XML is empty
         print(f"Generated XML size: {len(musicxml_content)} bytes")
-        if len(musicxml_content) > 0:
-            print(f"XML Preview: {musicxml_content[:100]}...")
-        else:
-            print("WARNING: Generated XML is empty!")
-
-        # Cleanup (optional - maybe keep for debugging for now)
-        # try:
-        #     os.remove(audio_path)
-        #     os.remove(midi_path)
-        #     os.remove(xml_path)
-        # except:
-        #     pass
+        
+        if len(musicxml_content) == 0:
+            print("ERROR: Generated XML is empty!")
+            raise HTTPException(status_code=500, detail="Generated XML is empty")
+            
+        print(f"XML Preview: {musicxml_content[:100]}...")
 
         return {"musicxml": musicxml_content}
 
