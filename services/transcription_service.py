@@ -4,6 +4,7 @@ import pretty_midi
 from basic_pitch.inference import predict, Model
 from basic_pitch import ICASSP_2022_MODEL_PATH
 from music21 import converter, stream, pitch, interval
+import os
 
 class TranscriptionService:
     def __init__(self):
@@ -18,11 +19,11 @@ class TranscriptionService:
             model_output, midi_data, note_events = predict(
                 str(audio_path),
                 self.model,
-                onset_threshold=0.3,           # Optimized for polyphonic violin
+                onset_threshold=0.3,
                 frame_threshold=0.25,
                 minimum_note_length=50.0,
-                minimum_frequency=196.0,       # G3
-                maximum_frequency=1760.0,      # A7
+                minimum_frequency=196.0,
+                maximum_frequency=1760.0,
                 multiple_pitch_bends=False
             )
             midi_data.write(str(output_midi_path))
@@ -49,6 +50,9 @@ class TranscriptionService:
             s.makeAccidentals(inPlace=True)
 
             # 3. Transpose to Violin range (G3-A7)
+            # This method needs to be implemented or imported if it was intended to be separate
+            # For now, let's keep it simple or assume it's part of the class logic
+            # The previous file had _transpose_to_violin_range, let's restore/fix it.
             s = self._transpose_to_violin_range(s)
 
             # 4. Write to MusicXML
