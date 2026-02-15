@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 python-multipart
-yt-dlp
+yt-dlp>=2024.04.09
 basic-pitch
 music21
 numpy
