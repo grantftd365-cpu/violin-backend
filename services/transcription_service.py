@@ -130,28 +130,3 @@ class TranscriptionService:
     # Deprecated method kept for compatibility if needed, but logic moved to _transpose_part_to_violin_range
     def _transpose_to_violin_range(self, s):
         return self._transpose_part_to_violin_range(s)
-
-            min_pitch = min(pitches)
-            max_pitch = max(pitches)
-            
-            # Target range
-            MIN_VIOLIN = 55
-            MAX_VIOLIN = 100
-
-            transpose_semitones = 0
-            
-            if min_pitch < MIN_VIOLIN:
-                # Too low, shift up
-                transpose_semitones = MIN_VIOLIN - min_pitch
-            elif max_pitch > MAX_VIOLIN:
-                # Too high, shift down
-                transpose_semitones = MAX_VIOLIN - max_pitch
-            
-            if transpose_semitones != 0:
-                print(f"Transposing by {transpose_semitones} semitones to fit Violin range.")
-                return s.transpose(transpose_semitones)
-            
-            return s
-        except Exception as e:
-            print(f"Error during transposition: {e}")
-            return s
