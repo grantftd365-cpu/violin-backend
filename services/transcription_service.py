@@ -56,25 +56,42 @@ class TranscriptionService:
                 quarterLengthDivisors=(4, 3)
             )
 
-            # 2. Cleanup notation
-            s.makeBeams(inPlace=True)
-            s.makeTies(inPlace=True)
-            s.makeAccidentals(inPlace=True)
+            # Fix for "cannot process a stream that is neither a Measure nor has no Measures"
+            # Ensure we have a Score -> Part -> Measure hierarchy
+            if not isinstance(s, stream.Score):
+                new_score = stream.Score()
+                if isinstance(s, stream.Part):
+                    new_score.insert(0, s)
+                else:
+                    # It's a flat stream or something else, wrap in Part
+                    p = stream.Part()
+                    for element in s:
+                        p.insert(element.offset, element)
+                    new_score.insert(0, p)
+                s = new_score
+
+            # 2. Cleanup notation (makeNotation creates measures, beams, ties)
+            # makeNotation works on Parts, so we iterate through parts
+            for p in s.parts:
+                p.makeNotation(inPlace=True)
+                p.makeBeams(inPlace=True)
+                p.makeTies(inPlace=True)
+                p.makeAccidentals(inPlace=True)
 
             # 3. Transpose to Violin range (G3-A7)
-            # This method needs to be implemented or imported if it was intended to be separate
-            # For now, let's keep it simple or assume it's part of the class logic
-            # The previous file had _transpose_to_violin_range, let's restore/fix it.
-            s = self._transpose_to_violin_range(s)
+            # Apply transposition to all parts
+            for p in s.parts:
+                self._transpose_part_to_violin_range(p)
 
             # 4. Write to MusicXML
             s.write('musicxml', fp=str(output_xml_path))
             return output_xml_path
         except Exception as e:
             print(f"Error converting to MusicXML: {e}")
+            gc.collect()
             return None
 
-    def _transpose_to_violin_range(self, s: stream.Stream) -> stream.Stream:
+    def _transpose_part_to_violin_range(self, s: stream.Stream) -> stream.Stream:
         """
         Check pitch range and transpose if necessary.
         Violin Range: G3 (55) to A7 (100)
@@ -84,6 +101,35 @@ class TranscriptionService:
             pitches = [n.pitch.midi for n in s.recurse().notes if hasattr(n, 'pitch')]
             if not pitches:
                 return s
+
+            min_pitch = min(pitches)
+            max_pitch = max(pitches)
+            
+            # Target range
+            MIN_VIOLIN = 55
+            MAX_VIOLIN = 100
+
+            transpose_semitones = 0
+            
+            if min_pitch < MIN_VIOLIN:
+                # Too low, shift up
+                transpose_semitones = MIN_VIOLIN - min_pitch
+            elif max_pitch > MAX_VIOLIN:
+                # Too high, shift down
+                transpose_semitones = MAX_VIOLIN - max_pitch
+            
+            if transpose_semitones != 0:
+                print(f"Transposing by {transpose_semitones} semitones to fit Violin range.")
+                return s.transpose(transpose_semitones)
+            
+            return s
+        except Exception as e:
+            print(f"Error during transposition: {e}")
+            return s
+
+    # Deprecated method kept for compatibility if needed, but logic moved to _transpose_part_to_violin_range
+    def _transpose_to_violin_range(self, s):
+        return self._transpose_part_to_violin_range(s)
 
             min_pitch = min(pitches)
             max_pitch = max(pitches)
