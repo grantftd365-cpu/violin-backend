@@ -8,7 +8,7 @@ from pathlib import Path
 from services.youtube_service import YoutubeService
 from services.transcription_service import TranscriptionService
 from services.recognition_service import RecognitionService
-from googlesearch import search
+from duckduckgo_search import DDGS
 from fastapi import Request
 import gc
 
@@ -169,21 +169,25 @@ async def search_imslp(request: Request):
             raise HTTPException(status_code=400, detail="Search keyword is required")
         
         # Construct search query
-        search_query = f"site:imslp.org filetype:pdf {keyword} violin"
+        search_query = f"site:imslp.org {keyword} violin pdf"
         print(f"[IMSLP SEARCH] Query: {search_query}")
         
-        # Perform Google search
+        # Perform DuckDuckGo search (more reliable than Google for bots)
         results = []
         try:
-            for url in search(search_query, num_results=5, lang="en"):
-                # Extract title from URL or make it readable
-                title = url.split('/')[-1].replace('_', ' ').replace('.pdf', '')
-                results.append({
-                    "title": title,
-                    "link": url
-                })
+            with DDGS() as ddgs:
+                ddg_results = ddgs.text(search_query, max_results=5)
+                for r in ddg_results:
+                    # DDGS returns {'title': ..., 'href': ..., 'body': ...}
+                    title = r.get('title', 'Unknown Title').replace(' - IMSLP', '')
+                    link = r.get('href', '')
+                    if link:
+                        results.append({
+                            "title": title,
+                            "link": link
+                        })
         except Exception as search_err:
-            print(f"[IMSLP SEARCH] Google search error: {search_err}")
+            print(f"[IMSLP SEARCH] DDG search error: {search_err}")
             # Return empty list instead of crashing
             return {"results": []}
         
