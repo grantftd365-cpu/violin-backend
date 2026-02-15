@@ -5,6 +5,7 @@ from basic_pitch.inference import predict, Model
 from basic_pitch import ICASSP_2022_MODEL_PATH
 from music21 import converter, stream, pitch, interval
 import os
+import gc
 
 class TranscriptionService:
     def __init__(self):
@@ -16,6 +17,9 @@ class TranscriptionService:
         Convert audio to MIDI using basic-pitch with violin optimizations.
         """
         try:
+            # Force garbage collection before heavy operation
+            gc.collect()
+            
             model_output, midi_data, note_events = predict(
                 str(audio_path),
                 self.model,
@@ -27,9 +31,17 @@ class TranscriptionService:
                 multiple_pitch_bends=False
             )
             midi_data.write(str(output_midi_path))
+            
+            # Explicitly delete large objects
+            del model_output
+            del midi_data
+            del note_events
+            gc.collect()
+            
             return output_midi_path
         except Exception as e:
             print(f"Error transcribing audio: {e}")
+            gc.collect()
             return None
 
     def convert_midi_to_musicxml(self, midi_path: Path, output_xml_path: Path) -> Optional[Path]:

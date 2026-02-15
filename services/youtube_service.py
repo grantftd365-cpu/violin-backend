@@ -18,8 +18,10 @@ class YoutubeService:
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
-                'preferredquality': '192',
+                'preferredquality': '64', # Low quality is fine for transcription, saves memory
             }],
+            # Force mono and 22050Hz to save memory (Render 512MB limit)
+            'postprocessor_args': ['-ac', '1', '-ar', '22050'],
             'outtmpl': str(self.download_dir / '%(id)s.%(ext)s'),
             'quiet': True,
             'no_warnings': True,

@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 from services.youtube_service import YoutubeService
 from services.transcription_service import TranscriptionService
+import gc
 
 app = FastAPI(title="Violin Sheet Generator")
 
@@ -41,6 +42,9 @@ async def transcribe_youtube(request: TranscriptionRequest):
     4. Return MusicXML content
     """
     try:
+        # Force GC at start
+        gc.collect()
+        
         # 1. Download
         print(f"Downloading audio from: {request.url}")
         audio_path = youtube_service.download_audio(request.url)
@@ -87,6 +91,21 @@ async def transcribe_youtube(request: TranscriptionRequest):
     except Exception as e:
         print(f"Error processing request: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+    finally:
+        # Cleanup temp files to save space
+        try:
+            if 'audio_path' in locals() and audio_path and audio_path.exists():
+                os.remove(audio_path)
+            if 'midi_path' in locals() and midi_path and midi_path.exists():
+                os.remove(midi_path)
+            if 'xml_path' in locals() and xml_path and xml_path.exists():
+                os.remove(xml_path)
+        except Exception as cleanup_error:
+            print(f"Cleanup error: {cleanup_error}")
+        
+        # Final GC
+        gc.collect()
 
 if __name__ == "__main__":
     import uvicorn
