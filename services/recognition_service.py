@@ -49,12 +49,12 @@ class RecognitionService:
                         'artist': artist
                     }
             
-            # Lower threshold to 0.4 for better recall on classical pieces
-            if best_match and best_score > 0.4:
-                print(f"[RECOGNITION] Accepted: {best_match['title']} (Score: {best_score})")
+            # Ultra-low threshold (5%) for maximum recognition recall
+            if best_match and best_score > 0.05:
+                print(f"[RECOGNITION] Accepted (low threshold): {best_match['title']} (Score: {best_score})")
                 return best_match
             
-            print(f"[RECOGNITION] Rejected best match (Score {best_score} < 0.4)")
+            print(f"[RECOGNITION] Rejected best match (Score {best_score} < 0.05)")
             return None
             
         except Exception as e:
