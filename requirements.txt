@@ -6,5 +6,4 @@ basic-pitch
 music21
 numpy
 scipy
-tensorflow-cpu; sys_platform != 'darwin'
-tensorflow-macos; sys_platform == 'darwin'
+tensorflow
