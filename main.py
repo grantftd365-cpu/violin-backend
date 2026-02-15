@@ -155,79 +155,44 @@ async def transcribe_upload(file: UploadFile = File(...)):
         gc.collect()
         print("[MEMORY] Cleanup complete")
 
-@app.post("/transcribe/youtube")
-async def transcribe_youtube(request: TranscriptionRequest):
+@app.post("/search/imslp")
+async def search_imslp(request: Request):
     """
-    1. Download audio from YouTube
-    2. Transcribe using Basic Pitch
-    3. Convert to MusicXML using Music21
-    4. Return MusicXML content
+    Search IMSLP for standard sheet music PDFs.
+    Uses Google search with site:imslp.org filter.
     """
     try:
-        # Force GC at start
-        gc.collect()
+        body = await request.json()
+        keyword = body.get('keyword', '').strip()
         
-        # 1. Download
-        print(f"Downloading audio from: {request.url}")
-        audio_path = youtube_service.download_audio(request.url)
-        if not audio_path:
-            raise HTTPException(status_code=400, detail="Failed to download audio from YouTube")
-
-        # 2. Transcribe to MIDI
-        midi_filename = audio_path.stem + ".mid"
-        midi_path = TEMP_DIR / midi_filename
-        print(f"Transcribing to MIDI: {midi_path}")
+        if not keyword:
+            raise HTTPException(status_code=400, detail="Search keyword is required")
         
-        midi_result = transcription_service.transcribe_audio_to_midi(audio_path, midi_path)
-        if not midi_result:
-            raise HTTPException(status_code=500, detail="Failed to transcribe audio to MIDI")
-
-        # 3. Convert to MusicXML
-        xml_filename = audio_path.stem + ".musicxml"
-        xml_path = TEMP_DIR / xml_filename
-        print(f"Converting to MusicXML: {xml_path}")
+        # Construct search query
+        search_query = f"site:imslp.org filetype:pdf {keyword} violin"
+        print(f"[IMSLP SEARCH] Query: {search_query}")
         
-        xml_result = transcription_service.convert_midi_to_musicxml(midi_path, xml_path)
-        if not xml_result:
-            raise HTTPException(status_code=500, detail="Failed to convert MIDI to MusicXML")
-
-        # 4. Read content
-        if not xml_path.exists():
-            print(f"ERROR: XML file missing at {xml_path}")
-            raise HTTPException(status_code=500, detail="XML file generation failed")
-
-        with open(xml_path, "r", encoding="utf-8") as f:
-            musicxml_content = f.read()
-
-        # Debug: Check if XML is empty
-        print(f"Generated XML size: {len(musicxml_content)} bytes")
-        
-        if len(musicxml_content) == 0:
-            print("ERROR: Generated XML is empty!")
-            raise HTTPException(status_code=500, detail="Generated XML is empty")
-            
-        print(f"XML Preview: {musicxml_content[:100]}...")
-
-        return {"musicxml": musicxml_content}
-
-    except Exception as e:
-        print(f"Error processing request: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    
-    finally:
-        # Cleanup temp files to save space
+        # Perform Google search
+        results = []
         try:
-            if 'audio_path' in locals() and audio_path and audio_path.exists():
-                os.remove(audio_path)
-            if 'midi_path' in locals() and midi_path and midi_path.exists():
-                os.remove(midi_path)
-            if 'xml_path' in locals() and xml_path and xml_path.exists():
-                os.remove(xml_path)
-        except Exception as cleanup_error:
-            print(f"Cleanup error: {cleanup_error}")
+            for url in search(search_query, num_results=5, lang="en"):
+                # Extract title from URL or make it readable
+                title = url.split('/')[-1].replace('_', ' ').replace('.pdf', '')
+                results.append({
+                    "title": title,
+                    "link": url
+                })
+        except Exception as search_err:
+            print(f"[IMSLP SEARCH] Google search error: {search_err}")
+            # Return empty list instead of crashing
+            return {"results": []}
         
-        # Final GC
-        gc.collect()
+        print(f"[IMSLP SEARCH] Found {len(results)} results")
+        return {"results": results}
+        
+    except Exception as e:
+        print(f"[IMSLP SEARCH] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
