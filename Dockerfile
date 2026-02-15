@@ -4,11 +4,12 @@ FROM python:3.10-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (FFmpeg for yt-dlp, libsndfile for librosa)
+# Install system dependencies (FFmpeg for yt-dlp, libsndfile for librosa, chromaprint for AcoustID)
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     libsndfile1 \
     git \
+    libchromaprint-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first to leverage Docker cache

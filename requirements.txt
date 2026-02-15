@@ -7,3 +7,5 @@ music21
 numpy
 scipy
 tensorflow==2.15.0
+pyacoustid
+musicbrainzngs

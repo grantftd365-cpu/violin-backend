@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from services.youtube_service import YoutubeService
 from services.transcription_service import TranscriptionService
+from services.recognition_service import RecognitionService
 import gc
 
 app = FastAPI(title="Violin Sheet Generator")
@@ -26,6 +27,7 @@ TEMP_DIR.mkdir(exist_ok=True)
 # Initialize services
 youtube_service = YoutubeService(download_dir=str(TEMP_DIR))
 transcription_service = TranscriptionService()
+recognition_service = RecognitionService()
 
 class TranscriptionRequest(BaseModel):
     url: str
@@ -76,7 +78,22 @@ async def transcribe_upload(file: UploadFile = File(...)):
         if file_size == 0:
             raise HTTPException(status_code=400, detail="Uploaded file is empty")
         
-        # 1. Transcribe to MIDI
+        # STEP 1: Try to identify the song
+        print(f"[RECOGNITION] Attempting to identify song...")
+        song_metadata = recognition_service.identify_song(audio_path)
+        is_recognized = False
+        recognition_msg = ""
+
+        if song_metadata:
+            is_recognized = True
+            recognition_msg = f"Identified: {song_metadata['title']} by {song_metadata['artist']}"
+            print(f"[RECOGNITION] {recognition_msg}")
+            # TODO: Future - fetch official score from IMSLP/Musescore
+            # For now, we still proceed to AI transcription as a fallback/display
+        else:
+            print("[RECOGNITION] Song not recognized, using AI transcription")
+
+        # 1. Transcribe to MIDI (AI Fallback)
         midi_filename = audio_path.stem + ".mid"
         midi_path = TEMP_DIR / midi_filename
         print(f"[MEMORY] Transcribing to MIDI: {midi_path}")
