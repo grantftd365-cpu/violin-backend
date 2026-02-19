@@ -3,7 +3,7 @@ from typing import Optional
 import pretty_midi
 from basic_pitch.inference import predict, Model
 from basic_pitch import ICASSP_2022_MODEL_PATH
-from music21 import converter, stream, pitch, interval
+from music21 import converter, stream, pitch, interval, key, meter, note, chord
 import os
 import gc
 
@@ -82,6 +82,65 @@ class TranscriptionService:
             # Apply transposition to all parts
             for p in s.parts:
                 self._transpose_part_to_violin_range(p)
+
+            # ========== NEW: RIGOROUS CLEANUP PHASE ==========
+            print("[CLEANUP] Starting rigorous sheet music cleanup...")
+            
+            # 1. FORCE 16TH NOTE GRID QUANTIZATION
+            # Process all parts to snap notes to rhythmic grid
+            try:
+                s.quantize(
+                    quarterLengthDivisors=[4],  # 16th notes (4 per quarter)
+                    processOffsets=True,        # Quantize start times
+                    processDurations=True,      # Quantize durations
+                    inPlace=True
+                )
+                print("[CLEANUP] Quantized to 16th-note grid")
+            except Exception as q_err:
+                print(f"[CLEANUP] Quantization warning: {q_err}")
+            
+            # 2. REMOVE ARTIFACTS (very short notes)
+            # Delete notes shorter than 16th note (0.25 quarter length)
+            for p in s.parts:
+                notes_to_remove = []
+                for element in p.recurse().notesAndRests:
+                    if element.duration.quarterLength < 0.25:
+                        notes_to_remove.append(element)
+                
+                for n in notes_to_remove:
+                    p.remove(n, recurse=True)
+                print(f"[CLEANUP] Removed {len(notes_to_remove)} short artifact notes")
+            
+            # 3. AUTO-DETECT KEY SIGNATURE
+            try:
+                detected_key = s.analyze('key')
+                # Insert key signature at the beginning
+                for p in s.parts:
+                    p.insert(0, key.Key(detected_key.tonic.name, detected_key.mode))
+                print(f"[CLEANUP] Detected key: {detected_key}")
+            except Exception as e:
+                print(f"[CLEANUP] Key detection failed: {e}, using default")
+            
+            # 4. AUTO-DETECT TIME SIGNATURE
+            try:
+                detected_time = s.analyze('time')
+                # Insert time signature
+                for p in s.parts:
+                    p.insert(0, meter.TimeSignature(f"{detected_time.numerator}/{detected_time.denominator}"))
+                print(f"[CLEANUP] Detected time signature: {detected_time}")
+            except Exception as e:
+                print(f"[CLEANUP] Time detection failed: {e}, using 4/4")
+                for p in s.parts:
+                    p.insert(0, meter.TimeSignature('4/4'))
+
+            # 5. FINAL NOTATION CLEANUP
+            for p in s.parts:
+                p.makeBeams(inPlace=True)
+                p.makeTies(inPlace=True)
+                p.makeAccidentals(inPlace=True)
+            
+            print("[CLEANUP] Rigorous cleanup complete")
+            # ================================================
 
             # 4. Write to MusicXML
             s.write('musicxml', fp=str(output_xml_path))
