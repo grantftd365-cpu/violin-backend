@@ -110,8 +110,69 @@ class TranscriptionService:
                 for n in notes_to_remove:
                     p.remove(n, recurse=True)
                 print(f"[CLEANUP] Removed {len(notes_to_remove)} short artifact notes")
+
+            # ========== NEW: AGGRESSIVE MONOPHONY & LEGATO ==========
+            print("[CLEANUP] Enforcing strict monophony (Violin Mode)...")
             
-            # 3. AUTO-DETECT KEY SIGNATURE
+            # 3. STRICT MONOPHONY (Keep Top Line Only)
+            for p in s.parts:
+                # Iterate measures to handle notes properly
+                # We need to flat the stream to sort notes by offset globally for overlapping check
+                # But manipulating flat stream is risky. Let's do it per measure or naive overlap check.
+                # Safer approach: Iterate all notes, group by offset.
+                
+                all_notes = list(p.recurse().notes)
+                if not all_notes:
+                    continue
+                    
+                # Group by offset
+                notes_by_offset = {}
+                for n in all_notes:
+                    off = n.offset
+                    if off not in notes_by_offset:
+                        notes_by_offset[off] = []
+                    notes_by_offset[off].append(n)
+                
+                # For each offset, keep only the highest pitch
+                for off in sorted(notes_by_offset.keys()):
+                    notes_at_off = notes_by_offset[off]
+                    if len(notes_at_off) > 1:
+                        # Sort by pitch (highest first)
+                        # Handle chords vs notes
+                        def get_pitch(element):
+                            if element.isChord:
+                                return max(p.ps for p in element.pitches)
+                            return element.pitch.ps
+                            
+                        notes_at_off.sort(key=get_pitch, reverse=True)
+                        
+                        # Keep highest, remove others
+                        highest = notes_at_off[0]
+                        for n in notes_at_off[1:]:
+                            p.remove(n, recurse=True)
+            
+            # 4. LEGATO FORCE (Fill small gaps)
+            # Extend notes to close gaps < 0.25
+            for p in s.parts:
+                notes = sorted(list(p.recurse().notes), key=lambda x: x.offset)
+                for i in range(len(notes) - 1):
+                    curr = notes[i]
+                    next_n = notes[i+1]
+                    curr_end = curr.offset + curr.duration.quarterLength
+                    gap = next_n.offset - curr_end
+                    
+                    if 0 < gap < 0.25:
+                        curr.duration.quarterLength += gap
+            
+            # 5. SIMPLIFY ENHARMONICS
+            for n in s.recurse().notes:
+                if n.isNote:
+                    n.pitch.simplifyEnharmonic(inPlace=True)
+            
+            print("[CLEANUP] Monophony and Legato applied")
+            # ========================================================
+            
+            # 3. AUTO-DETECT KEY SIGNATURE (Existing)
             try:
                 detected_key = s.analyze('key')
                 # Insert key signature at the beginning
