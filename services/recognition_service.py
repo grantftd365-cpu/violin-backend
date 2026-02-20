@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import base64
 import time
+import subprocess
 from pathlib import Path
 from typing import Optional, Dict, Any
 import os
@@ -25,13 +26,48 @@ class RecognitionService:
         string_to_sign = f"{http_method}\n{http_uri}\n{self.access_key}\n{data_type}\n{signature_version}\n{timestamp}"
         
         sign = hmac.new(
-            self.access_secret.encode('utf-8'),
-            string_to_sign.encode('utf-8'),
-            hashlib.sha1
+            self.access_secret.encode('ascii'), 
+            string_to_sign.encode('ascii'), 
+            digestmod=hashlib.sha1
         ).digest()
         
-        signature = base64.b64encode(sign).decode('utf-8')
+        signature = base64.b64encode(sign).decode('ascii')
         return signature
+
+    def _trim_audio(self, audio_path: Path, duration: int = 15) -> Optional[Path]:
+        """
+        Trim audio file to first N seconds using ffmpeg.
+        Returns path to trimmed file, or None if failed.
+        """
+        try:
+            temp_path = audio_path.parent / f"{audio_path.stem}_trimmed.wav"
+            
+            cmd = [
+                'ffmpeg', '-y',  # -y to overwrite
+                '-i', str(audio_path),
+                '-t', str(duration),  # First 15 seconds
+                '-acodec', 'pcm_s16le',  # PCM 16-bit
+                '-ar', '8000',  # 8kHz (sufficient for fingerprinting and very small)
+                '-ac', '1',  # Mono
+                str(temp_path)
+            ]
+            
+            print(f"[TRIM] Trimming to {duration}s: {audio_path} -> {temp_path}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                print(f"[TRIM] ffmpeg error: {result.stderr}")
+                return None
+            
+            if temp_path.exists():
+                print(f"[TRIM] Success: {temp_path.stat().st_size} bytes")
+                return temp_path
+            
+            return None
+            
+        except Exception as e:
+            print(f"[TRIM] Error trimming audio: {e}")
+            return None
 
     def identify_song(self, audio_path: Path) -> Optional[Dict[str, Any]]:
         """
@@ -42,20 +78,30 @@ class RecognitionService:
             print("[ACR] ERROR: Missing ACRCLOUD_ACCESS_KEY or ACRCLOUD_ACCESS_SECRET")
             return None
 
+        trimmed_path = None
         try:
-            print(f"[ACR] Identifying: {audio_path.name}")
+            # Step 1: Trim audio to 15 seconds to avoid size limits
+            trimmed_path = self._trim_audio(audio_path, duration=15)
+            
+            if not trimmed_path:
+                print("[ACR] Failed to trim audio, trying with full file...")
+                file_to_identify = audio_path
+            else:
+                file_to_identify = trimmed_path
+
+            print(f"[ACR] Identifying: {file_to_identify.name}")
             
             timestamp = str(int(time.time()))
             signature = self._generate_signature(timestamp)
             
             # Prepare multipart form
             files = {
-                'sample': open(audio_path, 'rb')
+                'sample': open(file_to_identify, 'rb')
             }
             
             data = {
                 'access_key': self.access_key,
-                'sample_bytes': str(os.path.getsize(audio_path)),
+                'sample_bytes': str(os.path.getsize(file_to_identify)),
                 'timestamp': timestamp,
                 'signature': signature,
                 'data_type': 'audio',
@@ -74,7 +120,6 @@ class RecognitionService:
             result = response.json()
             print(f"[ACR] Response: {result}")
             
-            # Parse ACRCloud response
             status = result.get('status', {})
             if status.get('code') == 0:
                 # Success!
@@ -105,5 +150,12 @@ class RecognitionService:
             print(f"[ACR] Error identifying song: {e}")
             return None
         finally:
+            # Cleanup trimmed file
+            if trimmed_path and trimmed_path.exists():
+                try:
+                    os.remove(trimmed_path)
+                except:
+                    pass
+            
             if 'files' in locals():
                 files['sample'].close()
