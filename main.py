@@ -90,8 +90,14 @@ async def transcribe_upload(file: UploadFile = File(...)):
             is_recognized = True
             recognition_msg = f"Identified: {song_metadata['title']} by {song_metadata['artist']}"
             print(f"[RECOGNITION] {recognition_msg}")
-            # TODO: Future - fetch official score from IMSLP/Musescore
-            # For now, we still proceed to AI transcription as a fallback/display
+            
+            # STEP 2: Auto-search for sheet music using the identified title
+            search_keyword = f"{song_metadata['title']} {song_metadata['artist']} violin"
+            # We can't call search_imslp directly because it expects a Request object
+            # But we can reuse the logic or just let the frontend trigger the search
+            # Better: Return the search query to frontend so it can open Bing
+            recognition_msg += f"\n(Tip: Click 'Search Web' to find standard score)"
+            
         else:
             print("[RECOGNITION] Song not recognized, using AI transcription")
 
